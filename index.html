@@ -57,7 +57,7 @@
                     <input type="password" id="password" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-green-500 focus:border-green-500 block w-full pl-10 p-2.5" placeholder="Masukkan password" required></div>
                     <p id="login-error" class="text-red-500 text-xs mt-2 hidden">Username atau Password salah!</p>
                 </div>
-                <button type="button" onclick="handleLogin()" id="btn-login" class="w-full text-white bg-green-600 hover:bg-green-700 focus:ring-4 focus:outline-none focus:ring-green-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center transition-colors shadow-md">Masuk ke Sistem</button>
+                <button type="submit" id="btn-login" class="w-full text-white bg-green-600 hover:bg-green-700 focus:ring-4 focus:outline-none focus:ring-green-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center transition-colors shadow-md">Masuk ke Sistem</button>
             </form>
         </div>
     </div>
@@ -528,13 +528,26 @@
                     document.getElementById('setup-warning').classList.remove('hidden');
                 }
                 isDataLoaded = true;
+                cekAutoLogin(); // Panggil Auto-Login
             } else {
                 setTimeout(() => {
                     inventoryData = [{ kode: "B001", nama: "Pupuk Urea", kategori: "Pupuk", supplier: "PT. Agro Jaya", stokAwal: 50, satuan: "Sak", rak: "G-01", masuk: 20, keluar: 15, stokAkhir: 55, hpp: 120000, petugas: "admin" }];
                     usersData = [{ username: "admin", password: "123", role: "Admin", foto: "" }];
                     historyKartuStok = [{ tanggal: "01/03/2026 08:00", kode: "B001", ket: "Stok Awal", masuk: 50, keluar: 0, sisa: 50, petugas: "Sistem" }];
                     isDataLoaded = true;
+                    cekAutoLogin(); // Panggil Auto-Login
                 }, 500);
+            }
+        }
+
+        // FUNGSI BARU UNTUK AUTO LOGIN
+        function cekAutoLogin() {
+            const savedUser = localStorage.getItem('btf_login_user');
+            const savedPass = localStorage.getItem('btf_login_pass');
+            if (savedUser && savedPass) {
+                document.getElementById('username').value = savedUser;
+                document.getElementById('password').value = savedPass;
+                handleLogin(); // Langsung eksekusi login otomatis
             }
         }
         
@@ -638,18 +651,26 @@
                     if (currentUser.role === 'Admin') { document.getElementById('nav-akun').classList.remove('hidden'); document.getElementById('nav-akun').classList.add('flex'); document.getElementById('nav-po').classList.remove('hidden'); document.getElementById('nav-po').classList.add('flex'); } 
                     else { document.getElementById('nav-akun').classList.add('hidden'); document.getElementById('nav-akun').classList.remove('flex'); document.getElementById('nav-po').classList.add('hidden'); document.getElementById('nav-po').classList.remove('flex'); }
                     
+                    // SIMPAN INFO LOGIN KE BROWSER
+                    localStorage.setItem('btf_login_user', userIn);
+                    localStorage.setItem('btf_login_pass', passIn);
+
                     document.getElementById('login-screen').style.display = 'none'; 
                     document.getElementById('main-app').classList.remove('hidden'); 
-                    document.getElementById('password').value = '';
                     switchPage('dashboard'); refreshData(); showToast(`Login berhasil! Selamat datang, ${currentUser.username}.`);
-                } else { errorMsg.classList.remove('hidden'); }
+                } else { 
+                    errorMsg.classList.remove('hidden'); 
+                    localStorage.removeItem('btf_login_user');
+                    localStorage.removeItem('btf_login_pass');
+                }
             } catch(err) { alert("Sistem belum siap: " + err.message); }
         }
 
         function handleLogout() {
+            localStorage.removeItem('btf_login_user');
+            localStorage.removeItem('btf_login_pass');
             currentUser = null; document.getElementById('main-app').classList.add('hidden'); document.getElementById('login-screen').style.display = 'flex'; document.getElementById('username').value = ''; document.getElementById('password').value = ''; switchPage('dashboard'); showToast('Anda telah logout.', 'success');
         }
-
         function switchPage(pageId) {
             document.querySelectorAll('.page-section').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.nav-link').forEach(el => { el.classList.remove('bg-green-600', 'text-white'); el.classList.add('text-slate-300', 'hover:bg-slate-700', 'hover:text-white'); });
