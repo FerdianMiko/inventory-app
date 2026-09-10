@@ -494,13 +494,18 @@
 
     <!-- SCRIPT UTAMA API -->
     <script>
-        // TARUH LINK GOOGLE APPS SCRIPT ANDA DI BAWAH INI
+        // TARUH LINK GOOGLE APPS SCRIPT ANDA DI BAWAH INI (HANYA DI BARIS INI SAJA)
         const GAS_API_URL = "https://script.google.com/macros/s/AKfycbw-V1ogm7OkwGktUQSdTtJZOgYA5WB17OEzbmdkxpByvldHm3--SUcwvh3lHXBGHV-S/exec";
 
         let inventoryData = [], suppliersData = [], usersData = [], dashboardInfoData = { title: "Informasi Sistem", desc: "Data belum dimuat", minStock: 5 }, minStockThreshold = 5, notesData = [], opnameHistoryData = [], returHistoryData = [], historyKartuStok = [];
         let currentUser = null, tempFotoBase64 = "", currentSort = { key: '', dir: '' }, activeKodeKartuStok = null, draftSuratJalanItems = [], draftPoItems = [], tomSelectInstances = {}, isDataLoaded = false;
 
-        window.onerror = function(msg, url, line) { console.error("Error: " + msg + "\nBaris: " + line); };
+        const SCRIPT_OPEN = '<scr' + 'ipt>';
+        const SCRIPT_CLOSE = '</scr' + 'ipt>';
+
+        window.onerror = function(message, source, lineno, colno, error) {
+            console.error("Kesalahan Aplikasi:\n" + message + "\nBaris: " + lineno);
+        };
 
         async function apiCall(action, payload = null) {
             if(GAS_API_URL === "URL_WEB_APP_ANDA_DISINI" || !GAS_API_URL) return null;
@@ -533,7 +538,7 @@
             }
         }
         
-        initializeApp();
+        try { initializeApp(); } catch(e) { console.error("Init error:", e); }
 
         async function runSetupDatabase() {
             const btn = document.getElementById('btn-setup');
@@ -896,7 +901,7 @@
 
         function renderDraftSJ() {
             const tbody = document.getElementById('table-draft-sj'); tbody.innerHTML = '';
-            if (draftSuratJalanItems.length === 0) { tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-center text-gray-400 italic">Belum ada barang ditambahkan.</td></tr>`; return; }
+            if (draftSuratJalanItems.length === 0) { tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-center text-gray-400 italic">Belum ada barang yang ditambahkan.</td></tr>`; return; }
             draftSuratJalanItems.forEach((item, idx) => { tbody.innerHTML += `<tr class="bg-white border-b"><td class="px-4 py-2 font-medium">${item.kode}</td><td class="px-4 py-2">${item.nama}</td><td class="px-4 py-2 text-center font-bold text-blue-600">${item.jumlah}</td><td class="px-4 py-2 text-center">${item.satuan}</td><td class="px-4 py-2 text-center"><button type="button" onclick="hapusItemSJ(${idx})" class="text-red-500 hover:text-red-700"><i class="fas fa-trash-alt"></i></button></td></tr>`; });
         }
 
@@ -959,7 +964,7 @@
             draftPoItems = []; document.getElementById('po-no').value=''; document.getElementById('po-catatan').value=''; initPoPage(); 
         }
 
-       function printPO(data) {
+        function printPO(data) {
             let printContents = `<html><head><title>Purchase Order - ${data.no}</title><style>body { font-family: 'Arial', sans-serif; padding: 30px; color: #000; } .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 10px; } .meta-info { display: flex; justify-content: space-between; margin-bottom: 30px; font-size: 14px; } table { border-collapse: collapse; width: 100%; font-size: 14px; margin-bottom: 20px; } th, td { border: 1px solid #000; padding: 10px; text-align: left; } th { background-color: #f0f0f0; } .text-center { text-align: center; } .text-right { text-align: right; } .signature-section { display: flex; justify-content: space-around; margin-top: 50px; text-align: center; } .signature-box { width: 200px; } .signature-line { margin-top: 80px; border-bottom: 1px solid #000; } @media print { @page { margin: 1cm; } }</style></head><body>
                 <div class="header"><h1>SURAT PEMESANAN BARANG (PO)</h1></div>
                 <div class="meta-info"><div><strong>Supplier:</strong><br><span style="font-size: 16px; font-weight: bold;">${data.supplier}</span><br>${data.catatan ? `Catatan: ${data.catatan}` : ''}</div><div><strong>No. PO:</strong> ${data.no}<br><strong>Tanggal:</strong> ${data.tanggal}<br><strong>Dibuat Oleh:</strong> ${data.petugas}</div></div>
@@ -1144,6 +1149,131 @@
             const dateStr = `${new Date().getFullYear()}${(new Date().getMonth()+1).toString().padStart(2, '0')}${new Date().getDate().toString().padStart(2, '0')}`;
             XLSX.writeFile(workbook, `Data_Inventaris_${dateStr}.xlsx`);
             showToast('Data diekspor ke Excel!');
+        }
+        
+        function tampilkanKartuStok(isRefresh = false) {
+            const kode = document.getElementById('ks-kode').value;
+            if (!kode) {
+                if (!isRefresh) showToast('Silakan pilih barang terlebih dahulu!', 'error');
+                return;
+            }
+            activeKodeKartuStok = kode;
+
+            const item = inventoryData.find(i => i.kode === kode);
+            if (item) {
+                document.getElementById('ks-info-kode').textContent = item.kode;
+                document.getElementById('ks-info-nama').textContent = item.nama;
+                document.getElementById('ks-info-kategori').textContent = item.kategori;
+                document.getElementById('ks-info-stok').textContent = item.stokAkhir;
+                document.getElementById('ks-container').classList.remove('hidden');
+                document.getElementById('btn-print-ks').classList.remove('hidden');
+            }
+
+            const tbody = document.getElementById('table-kartu-stok-body');
+            tbody.innerHTML = '';
+
+            let dataToRender = Array.isArray(historyKartuStok) ? historyKartuStok.filter(log => log.kode === kode) : [];
+            const startDateVal = document.getElementById('ks-start-date').value;
+            const endDateVal = document.getElementById('ks-end-date').value;
+            
+            if (startDateVal) {
+                const start = new Date(startDateVal); start.setHours(0, 0, 0, 0);
+                dataToRender = dataToRender.filter(log => parseCustomDate(log.tanggal) >= start);
+            }
+            if (endDateVal) {
+                const end = new Date(endDateVal); end.setHours(23, 59, 59, 999);
+                dataToRender = dataToRender.filter(log => parseCustomDate(log.tanggal) <= end);
+            }
+
+            if (dataToRender.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">Tidak ada riwayat transaksi untuk periode ini.</td></tr>`;
+                return;
+            }
+
+            dataToRender.forEach(log => {
+                let masukHtml = log.masuk > 0 ? `+${log.masuk}` : '-';
+                let keluarHtml = log.keluar > 0 ? `-${log.keluar}` : '-';
+                tbody.innerHTML += `
+                    <tr class="bg-white border-b hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${log.tanggal}</td>
+                        <td class="px-6 py-4 font-medium text-gray-900">${log.ket}</td>
+                        <td class="px-6 py-4 text-center text-green-600 font-bold">${masukHtml}</td>
+                        <td class="px-6 py-4 text-center text-red-600 font-bold">${keluarHtml}</td>
+                        <td class="px-6 py-4 text-center font-bold text-gray-900 bg-gray-50">${log.sisa}</td>
+                        <td class="px-6 py-4 text-sm text-gray-600"><i class="fas fa-user-circle mr-1"></i>${log.petugas}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        function printKartuStok() {
+            const kode = document.getElementById('ks-kode').value;
+            if (!kode) return;
+            const item = inventoryData.find(i => i.kode === kode);
+            if (!item) return;
+
+            let dataToPrint = Array.isArray(historyKartuStok) ? historyKartuStok.filter(log => log.kode === kode) : [];
+            const startDateVal = document.getElementById('ks-start-date').value;
+            const endDateVal = document.getElementById('ks-end-date').value;
+            
+            let periodeStr = "Semua Waktu";
+            if (startDateVal || endDateVal) {
+                const s = startDateVal ? startDateVal : "Awal";
+                const e = endDateVal ? endDateVal : "Sekarang";
+                periodeStr = `${s} s/d ${e}`;
+                
+                if (startDateVal) {
+                    const start = new Date(startDateVal); start.setHours(0, 0, 0, 0);
+                    dataToPrint = dataToPrint.filter(log => parseCustomDate(log.tanggal) >= start);
+                }
+                if (endDateVal) {
+                    const end = new Date(endDateVal); end.setHours(23, 59, 59, 999);
+                    dataToPrint = dataToPrint.filter(log => parseCustomDate(log.tanggal) <= end);
+                }
+            }
+
+            let printContents = `<html><head><title>Kartu Stok - ${item.nama}</title>
+                <style>
+                    body { font-family: 'Arial', sans-serif; padding: 20px; color: #333; }
+                    .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+                    .info-box { margin-bottom: 20px; display: flex; justify-content: space-between; font-size: 14px; }
+                    table { border-collapse: collapse; width: 100%; font-size: 13px; }
+                    th, td { border: 1px solid #000; padding: 8px; text-align: left; }
+                    th { background-color: #f4f4f4; }
+                    .text-center { text-align: center; }
+                    .text-right { text-align: right; }
+                    @media print { @page { margin: 1cm; } }
+                </style></head><body>
+                <div class="header"><h2>KARTU STOK BARANG</h2></div>
+                <div class="info-box">
+                    <div><strong>Kode:</strong> ${item.kode}<br><strong>Nama:</strong> ${item.nama}<br><strong>Kategori:</strong> ${item.kategori}</div>
+                    <div class="text-right"><strong>Periode:</strong> ${periodeStr}<br><strong>Stok Saat Ini:</strong> ${item.stokAkhir} ${item.satuan}</div>
+                </div>
+                <table><thead><tr>
+                    <th>Tanggal & Waktu</th><th>Keterangan</th><th class="text-center">Masuk</th><th class="text-center">Keluar</th><th class="text-center">Sisa Stok</th><th>Petugas</th>
+                </tr></thead><tbody>`;
+            
+            if (dataToPrint.length === 0) {
+                printContents += `<tr><td colspan="6" class="text-center">Tidak ada transaksi</td></tr>`;
+            } else {
+                dataToPrint.forEach(log => {
+                    let m = log.masuk > 0 ? `+${log.masuk}` : '-';
+                    let k = log.keluar > 0 ? `-${log.keluar}` : '-';
+                    printContents += `<tr>
+                        <td>${log.tanggal}</td><td>${log.ket}</td><td class="text-center">${m}</td><td class="text-center">${k}</td><td class="text-center" style="font-weight:bold; background:#f9f9f9;">${log.sisa}</td><td>${log.petugas}</td>
+                    </tr>`;
+                });
+            }
+            
+            printContents += `</tbody></table>
+                <script>window.onload=function(){window.print();}<\/script></body></html>`;
+            
+            const printWindow = window.open('', '_blank');
+            if (printWindow) {
+                printWindow.document.open(); printWindow.document.write(printContents); printWindow.document.close();
+            } else {
+                alert("MOHON IZINKAN POP-UP: Browser memblokir cetak. Izinkan pop-up lalu coba lagi.");
+            }
         }
     </script>
 </body>
